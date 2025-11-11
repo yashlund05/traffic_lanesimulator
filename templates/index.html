@@ -1,0 +1,83 @@
+<!-- templates/index.html -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Traffic Queue Management — Data Structures Demo</title>
+ <link rel="stylesheet" href="/assets/style.css">
+
+
+
+</head>
+
+<body>
+  <div class="container">
+    <h1>Traffic Queue Management — Data Structures Demo</h1>
+    <div class="top-row">
+      <div id="lanes" class="lanes"></div>
+      <div class="controls">
+        <h2>Controls</h2>
+        <div class="control-row">
+          <label>Lane:
+            <select id="lane-select"></select>
+          </label>
+        </div>
+        <div class="control-row">
+          <label>Vehicle Type:
+            <select id="veh-type">
+              <option>Car</option>
+              <option>Bike</option>
+              <option>Truck</option>
+              <option>Ambulance</option>
+            </select>
+          </label>
+        </div>
+        <div class="control-row">
+          <button id="btn-enq">Enqueue Vehicle</button>
+          <button id="btn-deq">Dequeue Vehicle</button>
+        </div>
+
+        <hr>
+        <h3>Signal Control</h3>
+        <div class="control-row">
+          <button id="btn-prev">Previous Lane</button>
+          <button id="btn-next">Next Lane</button>
+        </div>
+        <div class="control-row">
+          <button id="btn-start">Start Auto</button>
+          <button id="btn-stop">Stop Auto</button>
+          <input id="green-time" type="number" value="5" min="1" step="1" /> sec
+        </div>
+
+        <hr>
+        <button id="btn-reset" class="danger">Reset System</button>
+      </div>
+    </div>
+
+    <section class="explain">
+      <h2>Data Structure Explanation</h2>
+      <div id="explain-box">
+        <!-- backend explanation will populate here -->
+      </div>
+    </section>
+
+    <section class="logs">
+      <h2>Logs (latest first)</h2>
+      <div id="log-list"></div>
+    </section>
+
+    <footer>
+      <small>Implements Queues using Linked Lists. Built for Data Structures Unit-1 & Unit-2 demo.</small>
+    </footer>
+  </div>
+
+  <div id="lanes" class="lanes">
+  <!-- JS will dynamically build each lane with a signal -->
+  </div>
+
+<script src="/assets/app.js"></script>
+
+
+</body>
+</html>
