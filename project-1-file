@@ -1,0 +1,1355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stellar Cartographer - Live Simulation</title>
+    <style>
+        /* --- NEW: CSS Animations --- */
+        @keyframes pulse {
+            0%, 100% { r: 5; opacity: 0.8; }
+            50% { r: 7; opacity: 1; }
+        }
+        @keyframes flash {
+            50% { background: #ff6b35; border-color: #ff6b35; }
+        }
+        /* --- END: CSS Animations --- */
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0a0a1a 0%, #1a1a2e 100%);
+            color: #00ffff;
+            overflow: hidden;
+            height: 100vh;
+        }
+        .container {
+            display: flex;
+            height: 100vh;
+        }
+        .control-panel {
+            width: 35%; /* Slightly wider for better UI */
+            min-width: 450px;
+            background: rgba(10, 10, 26, 0.9);
+            border-right: 2px solid #00ffff;
+            overflow-y: auto;
+            padding: 20px;
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.3);
+        }
+        .visualizer {
+            width: 65%;
+            position: relative;
+            background: radial-gradient(circle at 50% 50%, #1a1a2e 0%, #0a0a1a 100%);
+        }
+        h1 {
+            text-align: center;
+            color: #ff6b35;
+            text-shadow: 0 0 20px #ff6b35;
+            margin-bottom: 20px;
+            font-size: 24px;
+            letter-spacing: 2px;
+        }
+        .section {
+            background: rgba(26, 26, 46, 0.6);
+            border: 1px solid #00ffff;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.2);
+        }
+        .section h2 {
+            color: #ff6b35;
+            font-size: 18px;
+            margin-bottom: 12px;
+            text-shadow: 0 0 10px #ff6b35;
+        }
+        button {
+            background: linear-gradient(135deg, #004d4d 0%, #006666 100%);
+            color: #00ffff;
+            border: 1px solid #00ffff;
+            padding: 10px 15px;
+            margin: 5px 5px 5px 0;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.3s;
+            box-shadow: 0 0 10px rgba(0, 255, 255, 0.3);
+        }
+        button:hover {
+            background: linear-gradient(135deg, #006666 0%, #008080 100%);
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.6);
+            transform: translateY(-2px);
+        }
+        button:disabled {
+            background: #222;
+            color: #555;
+            border-color: #555;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+        select, input, textarea {
+            background: rgba(10, 10, 26, 0.8);
+            color: #00ffff;
+            border: 1px solid #00ffff;
+            padding: 8px;
+            margin: 5px 5px 5px 0;
+            border-radius: 4px;
+            font-size: 13px;
+            width: calc(100% - 10px);
+        }
+        select:focus, input:focus, textarea:focus {
+            outline: none;
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.5);
+        }
+        .output {
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid #00ffff;
+            border-radius: 4px;
+            padding: 10px;
+            margin-top: 10px;
+            min-height: 40px;
+            max-height: 150px;
+            overflow-y: auto;
+            font-size: 12px;
+            color: #00ff88;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .output .error {
+            color: #ff4d4d;
+        }
+        .output .info {
+            color: #00ffff;
+        }
+        svg {
+            width: 100%;
+            height: 100%;
+        }
+        .node {
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .node:hover circle {
+            r: 10;
+            filter: drop-shadow(0 0 10px #ff6b35);
+        }
+        .node circle {
+            fill: #00ffff;
+            r: 5;
+            stroke: #1a1a2e;
+            stroke-width: 2;
+            /* --- NEW: Pulse Animation --- */
+            animation: pulse 3s ease-in-out infinite;
+        }
+        /* NEW: Start/End Node Highlights */
+        .node.node-start circle {
+            fill: #00ff88;
+            r: 8;
+            filter: drop-shadow(0 0 10px #00ff88);
+            animation: none; /* Stop pulsing when selected */
+        }
+        .node.node-end circle {
+            fill: #ff4d4d;
+            r: 8;
+            filter: drop-shadow(0 0 10px #ff4d4d);
+            animation: none; /* Stop pulsing when selected */
+        }
+        .node text {
+            fill: #00ffff;
+            font-size: 10px;
+            text-anchor: middle;
+            transform: translateY(-10px);
+            pointer-events: none;
+            text-shadow: 0 0 5px #0a0a1a;
+        }
+        .edge {
+            stroke: #00ffff;
+            stroke-width: 1;
+            opacity: 0.3;
+            transition: stroke 0.5s, opacity 0.5s;
+        }
+        .edge-label {
+            fill: #00ffff;
+            font-size: 10px;
+            opacity: 0.6;
+            text-anchor: middle;
+            transition: fill 0.5s;
+        }
+        .highlighted-path {
+            stroke: #ff6b35; /* Orange for Dijkstra */
+            stroke-width: 3;
+            opacity: 1;
+            animation: glow 1.5s ease-in-out infinite;
+        }
+        .unweighted-path {
+            stroke: #f0f; /* Magenta for BFS */
+            stroke-width: 3;
+            opacity: 1;
+            filter: drop-shadow(0 0 8px #f0f);
+        }
+        .mst-edge {
+            stroke: #00ff88;
+            stroke-width: 2.5;
+            opacity: 0.9;
+            filter: drop-shadow(0 0 5px #00ff88);
+        }
+        @keyframes glow {
+            0%, 100% { filter: drop-shadow(0 0 5px #ff6b35); }
+            50% { filter: drop-shadow(0 0 15px #ff6b35); }
+        }
+        .bst-visualization {
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 4px;
+            font-size: 11px;
+            max-height: 200px;
+            overflow: auto;
+            text-align: center;
+            transition: box-shadow 0.3s;
+        }
+        .tree-node {
+            display: inline-block;
+            padding: 5px 10px;
+            margin: 5px;
+            background: rgba(0, 255, 255, 0.2);
+            border: 1px solid #00ffff;
+            border-radius: 3px;
+        }
+        .tree-level {
+            margin-top: 10px;
+        }
+        /* --- NEW: Tree node flash animation --- */
+        .node-flashing {
+            animation: flash 0.5s ease-in-out;
+        }
+        .control-panel::-webkit-scrollbar {
+            width: 8px;
+        }
+        .control-panel::-webkit-scrollbar-track {
+            background: rgba(10, 10, 26, 0.5);
+        }
+        .control-panel::-webkit-scrollbar-thumb {
+            background: #00ffff;
+            border-radius: 4px;
+        }
+        .info-display {
+            display: inline-block;
+            padding: 5px 10px;
+            margin: 5px 5px 5px 0;
+            background: rgba(255, 107, 53, 0.2);
+            border: 1px solid #ff6b35;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="control-panel">
+            <h1>⭐ STELLAR CARTOGRAPHER ⭐</h1>
+            
+            <div class="section">
+                <h2>🌌 Graph Algorithms - Navigation</h2>
+                <p class="info" style="color: #00ffff; margin-bottom: 10px;">Click any 2 stars on the map to select a Start and End system.</p>
+                
+                <button id="btnStartSim" style="background: #008080;">Start Live Simulation</button>
+                <button id="btnStopSim" style="background: #800000;">Stop Simulation</button>
+                <br>
+                <button id="btnFindPathDijkstra">Find Path (Dijkstra - Cheapest)</button>
+                <button id="btnFindPathBFS">Find Path (BFS - Fewest Stops)</button>
+                <button id="btnCalcMST">Calculate Faction MST</button>
+                <button id="btnBFS">BFS Traversal (from Start)</button>
+                <button id="btnDFS">DFS Traversal (from Start)</button>
+                <button id="btnClearMap">Clear Map</button>
+                <div class="output" id="graphOutput"></div>
+            </div>
+
+            <div class="section">
+                <h2>🔍 Binary Search Tree - Index</h2>
+                <button id="btnBuildBST">Build System Index (BST)</button>
+                <button id="btnBSTInOrder">In-Order</button>
+                <button id="btnBSTPreOrder">Pre-Order</button>
+                <button id="btnBSTPostOrder">Post-Order</button>
+                <button id="btnBSTInOrderNonRec">In-Order (Non-Rec)</button>
+                <button id="btnBSTLevelOrder">Level-Order</button>
+                <br>
+                <input type="text" id="systemNameInput" placeholder="System Name (e.g. Vega)">
+                <button id="btnSearchBST">Search</button>
+                <button id="btnDeleteBST">Delete</button>
+                <div class="output" id="bstOutput"></div>
+                <div class="bst-visualization" id="bstVis"></div>
+            </div>
+
+            <div class="section">
+                <h2>⚖️ AVL Tree - Balanced Index</h2>
+                <button id="btnBuildAVL">Build AVL Tree</button>
+                <button id="btnCompareHeights">Compare BST vs AVL</button>
+                <div class="output" id="avlOutput"></div>
+                <div class="bst-visualization" id="avlVis"></div>
+            </div>
+
+            <div class="section">
+                <h2>⚠️ Heap - Threat Assessment</h2>
+                <button id="btnFindTopDangerous">Top 5 Dangerous Systems</button>
+                <button id="btnHeapSort">Sort All by Threat (HeapSort)</button>
+                <div class="output" id="heapOutput" style="min-height: 120px;"></div> </div>
+
+            <div class="section">
+                <h2>📡 Huffman Coding - Messages</h2>
+                <textarea id="messageInput" rows="3" placeholder="Enter message to compress..."></textarea>
+                <button id="btnCompressMsg">Compress Message</button>
+                <div class="output" id="huffmanOutput"></div>
+            </div>
+
+            <div class="section">
+                <h2>🧵 Threaded Binary Tree</h2>
+                <button id="btnBuildTBT">Build Threaded Index</button>
+                <button id="btnThreadedTraversal">Threaded In-Order Traversal</button>
+                <div class="output" id="threadedOutput"></div>
+            </div>
+
+        </div>
+        <div class="visualizer">
+            <svg id="galaxyMap" width="100%" height="100%"></svg>
+        </div>
+    </div>
+
+    <script>
+        // --- MODIFIED: Galaxy Data (Added base_cost) ---
+        const galaxyData = {
+            systems: [
+                { id: "s1", name: "Sol", x: 100, y: 300, pirates: 2 },
+                { id: "s2", name: "Sirius", x: 150, y: 200, pirates: 5 },
+                { id: "s3", name: "Alpha Centauri", x: 250, y: 350, pirates: 1 },
+                { id: "s4", name: "Betelgeuse", x: 400, y: 150, pirates: 9 },
+                { id: "s5", name: "Vega", x: 500, y: 300, pirates: 3 },
+                { id: "s6", name: "Rigel", x: 600, y: 100, pirates: 10 },
+                { id: "s7", name: "Pleiades", x: 700, y: 250, pirates: 7 },
+                { id: "s8", name: "Aldebaran", x: 450, y: 450, pirates: 4 },
+                { id: "s9", name: "Arcturus", x: 300, y: 50, pirates: 2 },
+                { id: "s10", name: "Antares", x: 550, y: 500, pirates: 8 },
+                { id: "s11", name: "Proxima", x: 200, y: 450, pirates: 6 },
+                { id: "s12", name: "Polaris", x: 350, y: 250, pirates: 3 },
+                { id: "s13", name: "Deneb", x: 650, y: 350, pirates: 5 },
+                { id: "s14", name: "Capella", x: 500, y: 150, pirates: 4 },
+                { id: "s15", name: "Procyon", x: 250, y: 150, pirates: 2 }
+            ],
+            lanes: [ // 'cost' is now 'base_cost'
+                { from: "s1", to: "s2", base_cost: 4 },
+                { from: "s1", to: "s3", base_cost: 2 },
+                { from: "s2", to: "s4", base_cost: 5 },
+                { from: "s3", to: "s5", base_cost: 6 },
+                { from: "s4", to: "s6", base_cost: 3 },
+                { from: "s5", to: "s7", base_cost: 4 },
+                { from: "s6", to: "s7", base_cost: 2 },
+                { from: "s3", to: "s8", base_cost: 7 },
+                { from: "s8", to: "s10", base_cost: 3 },
+                { from: "s5", to: "s8", base_cost: 1 },
+                { from: "s4", to: "s9", base_cost: 8 },
+                { from: "s9", to: "s2", base_cost: 6 },
+                { from: "s1", to: "s11", base_cost: 5 },
+                { from: "s11", to: "s8", base_cost: 4 },
+                { from: "s3", to: "s12", base_cost: 3 },
+                { from: "s12", to: "s5", base_cost: 2 },
+                { from: "s12", to: "s4", base_cost: 4 },
+                { from: "s5", to: "s13", base_cost: 5 },
+                { from: "s7", to: "s13", base_cost: 3 },
+                { from: "s13", to: "s10", base_cost: 6 },
+                { from: "s4", to: "s14", base_cost: 2 },
+                { from: "s14", to: "s6", base_cost: 3 },
+                { from: "s2", to: "s15", base_cost: 4 },
+                { from: "s15", to: "s9", base_cost: 3 },
+                { from: "s15", to: "s12", base_cost: 2 }
+            ]
+        };
+
+        // --- Priority Queue (Unchanged) ---
+        class PriorityQueue {
+            constructor() { this.elements = []; }
+            enqueue(element, priority) {
+                this.elements.push({ element, priority });
+                this.elements.sort((a, b) => a.priority - b.priority);
+            }
+            dequeue() { return this.elements.shift().element; }
+            isEmpty() { return this.elements.length === 0; }
+        }
+
+        // --- Graph Class (Unchanged) ---
+        class Graph {
+            constructor() {
+                this.adjList = new Map();
+                this.allEdges = [];
+            }
+            addVertex(vertex) {
+                if (!this.adjList.has(vertex)) {
+                    this.adjList.set(vertex, []);
+                }
+            }
+            addEdge(v1, v2, weight) {
+                this.adjList.get(v1).push({ node: v2, weight });
+                this.adjList.get(v2).push({ node: v1, weight });
+                this.allEdges.push({ from: v1, to: v2, weight });
+            }
+            dijkstra(start, end) {
+                const distances = {};
+                const previous = {};
+                const pq = new PriorityQueue();
+                const visited = new Set();
+                for (let vertex of this.adjList.keys()) {
+                    distances[vertex] = Infinity;
+                    previous[vertex] = null;
+                }
+                distances[start] = 0;
+                pq.enqueue(start, 0);
+                while (!pq.isEmpty()) {
+                    const current = pq.dequeue();
+                    if (visited.has(current)) continue;
+                    visited.add(current);
+                    if (current === end) break;
+                    for (let neighbor of this.adjList.get(current)) {
+                        const alt = distances[current] + neighbor.weight;
+                        if (alt < distances[neighbor.node]) {
+                            distances[neighbor.node] = alt;
+                            previous[neighbor.node] = current;
+                            pq.enqueue(neighbor.node, alt);
+                        }
+                    }
+                }
+                const path = [];
+                let curr = end;
+                while (curr) {
+                    path.unshift(curr);
+                    curr = previous[curr];
+                }
+                if (path[0] === start) {
+                    return { path, distance: distances[end] };
+                }
+                return { path: [], distance: Infinity };
+            }
+            bfsShortestPath(start, end) {
+                const visited = new Set();
+                const queue = [[start]];
+                visited.add(start);
+                while (queue.length > 0) {
+                    const path = queue.shift();
+                    const vertex = path[path.length - 1];
+                    if (vertex === end) {
+                        return path;
+                    }
+                    for (let neighbor of this.adjList.get(vertex)) {
+                        if (!visited.has(neighbor.node)) {
+                            visited.add(neighbor.node);
+                            const newPath = [...path, neighbor.node];
+                            queue.push(newPath);
+                        }
+                    }
+                }
+                return [];
+            }
+            kruskalMST() {
+                const mst = [];
+                const parent = {};
+                this.adjList.forEach((_, vertex) => {
+                    parent[vertex] = vertex;
+                });
+                const find = (v) => {
+                    if (parent[v] === v) return v;
+                    return (parent[v] = find(parent[v]));
+                };
+                const union = (v1, v2) => {
+                    const root1 = find(v1);
+                    const root2 = find(v2);
+                    if (root1 !== root2) {
+                        parent[root1] = root2;
+                        return true;
+                    }
+                    return false;
+                };
+                const sortedEdges = [...this.allEdges].sort((a, b) => a.weight - b.weight);
+                for (let edge of sortedEdges) {
+                    if (union(edge.from, edge.to)) {
+                        mst.push(edge);
+                    }
+                }
+                return mst;
+            }
+            bfs(start) {
+                const visited = new Set();
+                const queue = [start];
+                const result = [];
+                visited.add(start);
+                while (queue.length > 0) {
+                    const vertex = queue.shift();
+                    result.push(vertex);
+                    for (let neighbor of this.adjList.get(vertex)) {
+                        if (!visited.has(neighbor.node)) {
+                            visited.add(neighbor.node);
+                            queue.push(neighbor.node);
+                        }
+                    }
+                }
+                return result;
+            }
+            dfs(start) {
+                const visited = new Set();
+                const result = [];
+                const dfsHelper = (vertex) => {
+                    visited.add(vertex);
+                    result.push(vertex);
+                    for (let neighbor of this.adjList.get(vertex)) {
+                        if (!visited.has(neighbor.node)) {
+                            dfsHelper(neighbor.node);
+                        }
+                    }
+                };
+                dfsHelper(start);
+                return result;
+            }
+        }
+        
+        // --- All other data structure classes (BST, AVL, Heap, Huffman, TBT) are unchanged ---
+        
+        // --- BST Node ---
+        class BSTNode {
+            constructor(value, data) {
+                this.value = value;
+                this.data = data;
+                this.left = null;
+                this.right = null;
+            }
+        }
+        
+        // --- Binary Search Tree ---
+        class BinarySearchTree {
+            constructor() {
+                this.root = null;
+            }
+            insert(value, data) {
+                const newNode = new BSTNode(value, data);
+                if (!this.root) {
+                    this.root = newNode;
+                    return;
+                }
+                let current = this.root;
+                while (true) {
+                    if (value === current.value) return; // No duplicates
+                    if (value < current.value) {
+                        if (!current.left) {
+                            current.left = newNode;
+                            return;
+                        }
+                        current = current.left;
+                    } else {
+                        if (!current.right) {
+                            current.right = newNode;
+                            return;
+                        }
+                        current = current.right;
+                    }
+                }
+            }
+            search(value) {
+                let current = this.root;
+                while (current) {
+                    if (value === current.value) return current;
+                    current = value < current.value ? current.left : current.right;
+                }
+                return null;
+            }
+            delete(value) {
+                this.root = this.deleteNode(this.root, value);
+            }
+            deleteNode(node, value) {
+                if (!node) return null;
+                if (value < node.value) {
+                    node.left = this.deleteNode(node.left, value);
+                } else if (value > node.value) {
+                    node.right = this.deleteNode(node.right, value);
+                } else {
+                    if (!node.left) return node.right;
+                    if (!node.right) return node.left;
+                    let minRight = node.right;
+                    while (minRight.left) minRight = minRight.left;
+                    node.value = minRight.value;
+                    node.data = minRight.data;
+                    node.right = this.deleteNode(node.right, minRight.value);
+                }
+                return node;
+            }
+            inOrder(node = this.root, result = []) {
+                if (node) {
+                    this.inOrder(node.left, result);
+                    result.push(node.value);
+                    this.inOrder(node.right, result);
+                }
+                return result;
+            }
+            preOrder(node = this.root, result = []) {
+                if (node) {
+                    result.push(node.value);
+                    this.preOrder(node.left, result);
+                    this.preOrder(node.right, result);
+                }
+                return result;
+            }
+            postOrder(node = this.root, result = []) {
+                if (node) {
+                    this.postOrder(node.left, result);
+                    this.postOrder(node.right, result);
+                    result.push(node.value);
+                }
+                return result;
+            }
+            inOrderNonRecursive() {
+                const result = [];
+                const stack = [];
+                let current = this.root;
+                while (current || stack.length > 0) {
+                    while (current) {
+                        stack.push(current);
+                        current = current.left;
+                    }
+                    current = stack.pop();
+                    result.push(current.value);
+                    current = current.right;
+                }
+                return result;
+            }
+            levelOrder() {
+                if (!this.root) return [];
+                const result = [];
+                const queue = [this.root];
+                while(queue.length > 0) {
+                    const node = queue.shift();
+                    result.push(node.value);
+                    if (node.left) queue.push(node.left);
+                    if (node.right) queue.push(node.right);
+                }
+                return result;
+            }
+            findHeight(node = this.root) {
+                if (!node) return -1;
+                return 1 + Math.max(this.findHeight(node.left), this.findHeight(node.right));
+            }
+            countLeaves(node = this.root) {
+                if (!node) return 0;
+                if (!node.left && !node.right) return 1;
+                return this.countLeaves(node.left) + this.countLeaves(node.right);
+            }
+        }
+        
+        // --- AVL Node ---
+        class AVLNode {
+            constructor(value, data) {
+                this.value = value;
+                this.data = data;
+                this.left = null;
+                this.right = null;
+                this.height = 1;
+            }
+        }
+        
+        // --- AVL Tree ---
+        class AVLTree {
+            constructor() {
+                this.root = null;
+            }
+            getHeight(node) {
+                return node ? node.height : 0;
+            }
+            getBalance(node) {
+                return node ? this.getHeight(node.left) - this.getHeight(node.right) : 0;
+            }
+            rotateRight(y) {
+                const x = y.left;
+                const T2 = x.right;
+                x.right = y;
+                y.left = T2;
+                y.height = Math.max(this.getHeight(y.left), this.getHeight(y.right)) + 1;
+                x.height = Math.max(this.getHeight(x.left), this.getHeight(x.right)) + 1;
+                return x;
+            }
+            rotateLeft(x) {
+                const y = x.right;
+                const T2 = y.left;
+                y.left = x;
+                x.right = T2;
+                x.height = Math.max(this.getHeight(x.left), this.getHeight(x.right)) + 1;
+                y.height = Math.max(this.getHeight(y.left), this.getHeight(y.right)) + 1;
+                return y;
+            }
+            insert(value, data) {
+                this.root = this.insertNode(this.root, value, data);
+            }
+            insertNode(node, value, data) {
+                if (!node) return new AVLNode(value, data);
+                if (value < node.value) {
+                    node.left = this.insertNode(node.left, value, data);
+                } else if (value > node.value) {
+                    node.right = this.insertNode(node.right, value, data);
+                } else {
+                    return node;
+                }
+                node.height = 1 + Math.max(this.getHeight(node.left), this.getHeight(node.right));
+                const balance = this.getBalance(node);
+                if (balance > 1 && value < node.left.value) {
+                    return this.rotateRight(node);
+                }
+                if (balance < -1 && value > node.right.value) {
+                    return this.rotateLeft(node);
+                }
+                if (balance > 1 && value > node.left.value) {
+                    node.left = this.rotateLeft(node.left);
+                    return this.rotateRight(node);
+                }
+                if (balance < -1 && value < node.right.value) {
+                    node.right = this.rotateRight(node.right);
+                    return this.rotateLeft(node);
+                }
+                return node;
+            }
+            findHeight(node = this.root) {
+                if (!node) return -1;
+                return 1 + Math.max(this.findHeight(node.left), this.findHeight(node.right));
+            }
+        }
+        
+        // --- Max Heap ---
+        class MaxHeap {
+            constructor() {
+                this.heap = [];
+            }
+            insert(value, data) {
+                this.heap.push({ value, data });
+                this.bubbleUp(this.heap.length - 1);
+            }
+            bubbleUp(index) {
+                while (index > 0) {
+                    const parentIndex = Math.floor((index - 1) / 2);
+                    if (this.heap[parentIndex].value >= this.heap[index].value) break;
+                    [this.heap[parentIndex], this.heap[index]] = [this.heap[index], this.heap[parentIndex]];
+                    index = parentIndex;
+                }
+            }
+            extractMax() {
+                if (this.heap.length === 0) return null;
+                if (this.heap.length === 1) return this.heap.pop();
+                const max = this.heap[0];
+                this.heap[0] = this.heap.pop();
+                this.bubbleDown(0);
+                return max;
+            }
+            bubbleDown(index) {
+                while (true) {
+                    const leftChild = 2 * index + 1;
+                    const rightChild = 2 * index + 2;
+                    let largest = index;
+                    if (leftChild < this.heap.length && this.heap[leftChild].value > this.heap[largest].value) {
+                        largest = leftChild;
+                    }
+                    if (rightChild < this.heap.length && this.heap[rightChild].value > this.heap[largest].value) {
+                        largest = rightChild;
+                    }
+                    if (largest === index) break;
+                    [this.heap[index], this.heap[largest]] = [this.heap[largest], this.heap[index]];
+                    index = largest;
+                }
+            }
+            static heapSort(arr) {
+                const heap = new MaxHeap();
+                arr.forEach(item => heap.insert(item.value, item.data));
+                const sorted = [];
+                while (heap.heap.length > 0) {
+                    sorted.unshift(heap.extractMax());
+                }
+                return sorted;
+            }
+        }
+
+        // --- Huffman Coding ---
+        class HuffmanNode {
+            constructor(char, freq) {
+                this.char = char;
+                this.freq = freq;
+                this.left = null;
+                this.right = null;
+            }
+        }
+        class HuffmanCoding {
+            buildTree(text) {
+                const freqMap = {};
+                for (let char of text) {
+                    freqMap[char] = (freqMap[char] || 0) + 1;
+                }
+                const nodes = Object.keys(freqMap).map(char => new HuffmanNode(char, freqMap[char]));
+                
+                while (nodes.length > 1) {
+                    nodes.sort((a, b) => a.freq - b.freq);
+                    const left = nodes.shift();
+                    const right = nodes.shift();
+                    const parent = new HuffmanNode(null, left.freq + right.freq);
+                    parent.left = left;
+                    parent.right = right;
+                    nodes.push(parent);
+                }
+                return nodes[0];
+            }
+            generateCodes(root, code = '', codes = {}) {
+                if (!root) return codes;
+                if (root.char !== null) {
+                    codes[root.char] = code || '0'; // Handle single-node tree
+                    return codes;
+                }
+                this.generateCodes(root.left, code + '0', codes);
+                this.generateCodes(root.right, code + '1', codes);
+                return codes;
+            }
+            compress(text) {
+                const root = this.buildTree(text);
+                const codes = this.generateCodes(root);
+                return codes;
+            }
+        }
+
+        // --- Threaded BST (Corrected Version) ---
+        class ThreadedBSTNode {
+            constructor(value, data) {
+                this.value = value;
+                this.data = data;
+                this.left = null;
+                this.right = null;
+                this.rightThread = false; // True if right pointer is a thread
+            }
+        }
+        class ThreadedBST {
+            constructor() {
+                this.root = null;
+            }
+            insert(value, data) {
+                const newNode = new ThreadedBSTNode(value, data);
+                if (!this.root) {
+                    this.root = newNode;
+                    return;
+                }
+                let current = this.root;
+                while (true) {
+                    if (value < current.value) {
+                        if (current.left === null) {
+                            current.left = newNode;
+                            newNode.right = current; // Thread to successor (parent)
+                            newNode.rightThread = true;
+                            return;
+                        }
+                        current = current.left;
+                    } else {
+                        if (current.right === null || current.rightThread) {
+                            newNode.right = current.right; // Copy successor
+                            newNode.rightThread = current.rightThread;
+                            current.right = newNode; // Point to new node
+                            current.rightThread = false;
+                            return;
+                        }
+                        current = current.right;
+                    }
+                }
+            }
+            leftmost(node) {
+                if (node === null) return null;
+                while (node.left !== null) {
+                    node = node.left;
+                }
+                return node;
+            }
+            inOrderTraversal() {
+                const result = [];
+                let current = this.leftmost(this.root);
+                while (current !== null) {
+                    result.push(current.value);
+                    if (current.rightThread) {
+                        current = current.right;
+                    } else {
+                        current = this.leftmost(current.right);
+                    }
+                }
+                return result;
+            }
+        }
+        
+        // --- Main App Class (The 'Brain') ---
+        class App {
+            constructor() {
+                // Get UI Elements
+                this.svg = document.getElementById('galaxyMap');
+                this.graphOutput = document.getElementById('graphOutput');
+                this.bstOutput = document.getElementById('bstOutput');
+                this.bstVis = document.getElementById('bstVis');
+                this.avlOutput = document.getElementById('avlOutput');
+                this.avlVis = document.getElementById('avlVis');
+                this.heapOutput = document.getElementById('heapOutput');
+                this.huffmanOutput = document.getElementById('huffmanOutput');
+                this.threadedOutput = document.getElementById('threadedOutput');
+                this.systemNameInput = document.getElementById('systemNameInput');
+                this.messageInput = document.getElementById('messageInput');
+
+                // --- MODIFIED: Store base data ---
+                this.baseSystems = JSON.parse(JSON.stringify(galaxyData.systems)); // Deep copy
+                this.baseLanes = JSON.parse(JSON.stringify(galaxyData.lanes)); // Deep copy
+                this.systemMap = new Map(this.baseSystems.map(s => [s.id, s]));
+
+                // State
+                this.selectedStartNode = null;
+                this.selectedEndNode = null;
+                this.simulationInterval = null; // NEW
+
+                // Init Algorithms
+                this.graph = new Graph();
+                this.bst = new BinarySearchTree();
+                this.avl = new AVLTree();
+                this.tbt = new ThreadedBST();
+
+                this.init();
+            }
+
+            init() {
+                this.buildGraph(); // Build initial graph
+                this.renderGalaxyMap();
+                this.setupListeners();
+                this.findTopDangerous(); // Show initial threat report
+                this.startSimulation(); // Start simulation by default
+            }
+
+            // --- MODIFIED: buildGraph now calculates cost dynamically ---
+            buildGraph() {
+                this.graph = new Graph(); // Reset graph
+                galaxyData.systems.forEach(s => this.graph.addVertex(s.id));
+                this.baseLanes.forEach(l => {
+                    const fromSystem = this.systemMap.get(l.from);
+                    const toSystem = this.systemMap.get(l.to);
+                    // Dynamic cost: base + pirates at both ends
+                    const dynamicCost = l.base_cost + fromSystem.pirates + toSystem.pirates;
+                    this.graph.addEdge(l.from, l.to, dynamicCost);
+                });
+            }
+
+            // --- Render Functions ---
+            renderGalaxyMap() {
+                this.svg.innerHTML = ''; // Clear map
+                
+                const width = this.svg.parentElement.clientWidth;
+                const height = this.svg.parentElement.clientHeight;
+                const padding = 50;
+                
+                const minX = Math.min(...galaxyData.systems.map(s => s.x)) - padding;
+                const maxX = Math.max(...galaxyData.systems.map(s => s.x)) + padding;
+                const minY = Math.min(...galaxyData.systems.map(s => s.y)) - padding;
+                const maxY = Math.max(...galaxyData.systems.map(s => s.y)) + padding;
+                
+                this.svg.setAttribute('viewBox', `${minX} ${minY} ${maxX - minX} ${maxY - minY}`);
+
+                // Draw Lanes
+                this.graph.allEdges.forEach(lane => { // Use graph.allEdges to get current costs
+                    const from = this.systemMap.get(lane.from);
+                    const to = this.systemMap.get(lane.to);
+                    this.svg.innerHTML += `
+                        <line class="edge" id="edge-${from.id}-${to.id}" x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" />
+                        <text class="edge-label" id="label-${from.id}-${to.id}" x="${(from.x + to.x) / 2}" y="${(from.y + to.y) / 2}">${lane.weight}</text>
+                    `;
+                });
+                
+                // Draw Systems
+                galaxyData.systems.forEach(system => {
+                    this.svg.innerHTML += `
+                        <g class="node" id="node-${system.id}" onclick="app.handleNodeClick('${system.id}')">
+                            <circle cx="${system.x}" cy="${system.y}"></circle>
+                            <text id="text-${system.id}" x="${system.x}" y="${system.y}">${system.name} (${system.pirates} threat)</text>
+                        </g>
+                    `;
+                });
+            }
+
+            // --- NEW: Update Map Visualization (for simulation) ---
+            updateGalaxyMap() {
+                // Update pirate threat labels
+                galaxyData.systems.forEach(system => {
+                    const textEl = document.getElementById(`text-${system.id}`);
+                    if (textEl) {
+                        textEl.textContent = `${system.name} (${system.pirates} threat)`;
+                    }
+                });
+                
+                // Update edge cost labels
+                this.graph.allEdges.forEach(lane => {
+                    const labelEl = document.getElementById(`label-${lane.from}-${lane.to}`) || document.getElementById(`label-${lane.to}-${lane.from}`);
+                    if (labelEl) {
+                        labelEl.textContent = lane.weight;
+                    }
+                });
+            }
+
+
+            clearHighlights() {
+                this.svg.querySelectorAll('.highlighted-path, .mst-edge, .unweighted-path').forEach(el => {
+                    el.classList.remove('highlighted-path');
+                    el.classList.remove('mst-edge');
+                    el.classList.remove('unweighted-path');
+                });
+                this.svg.querySelectorAll('.node-start, .node-end').forEach(el => {
+                    el.classList.remove('node-start');
+                    el.classList.remove('node-end');
+                });
+            }
+
+            renderTree(root, container) {
+                container.innerHTML = '';
+                if (!root) {
+                    container.innerHTML = 'Tree is empty.';
+                    return;
+                }
+                // --- MODIFIED: Added data-value for animation ---
+                const createTreeHTML = (node) => {
+                    if (!node) return '';
+                    let html = `<div class="tree-node" data-value="${node.value}">${node.value}</div>`;
+                    if (node.left || (node.right && !node.rightThread)) {
+                        html += `<div class="tree-level">
+                            ${node.left ? createTreeHTML(node.left) : '<div class="tree-node empty">null</div>'}
+                            ${node.right && !node.rightThread ? createTreeHTML(node.right) : '<div class="tree-node empty">null</div>'}
+                        </div>`;
+                    }
+                    return html;
+                }
+                container.innerHTML = createTreeHTML(root);
+            }
+            
+            // --- MODIFIED: Added Simulation Listeners ---
+            setupListeners() {
+                // Simulation
+                document.getElementById('btnStartSim').onclick = () => this.startSimulation();
+                document.getElementById('btnStopSim').onclick = () => this.stopSimulation();
+                
+                // Graph
+                document.getElementById('btnFindPathDijkstra').onclick = () => this.findShortestPath();
+                document.getElementById('btnFindPathBFS').onclick = () => this.findUnweightedShortestPath();
+                document.getElementById('btnCalcMST').onclick = () => this.calculateMST();
+                document.getElementById('btnBFS').onclick = () => this.bfsTraversal();
+                document.getElementById('btnDFS').onclick = () => this.dfsTraversal();
+                document.getElementById('btnClearMap').onclick = () => {
+                    this.clearHighlights();
+                    this.selectedStartNode = null;
+                    this.selectedEndNode = null;
+                    this.graphOutput.innerHTML = "Map cleared. Select a new start system.";
+                };
+                
+                // All other listeners (BST, AVL, etc.)
+                document.getElementById('btnBuildBST').onclick = () => this.buildBST();
+                document.getElementById('btnBSTInOrder').onclick = () => this.bstTraversal('inOrder');
+                document.getElementById('btnBSTPreOrder').onclick = () => this.bstTraversal('preOrder');
+                document.getElementById('btnBSTPostOrder').onclick = () => this.bstTraversal('postOrder');
+                document.getElementById('btnBSTInOrderNonRec').onclick = () => this.bstTraversal('inOrderNonRecursive');
+                document.getElementById('btnBSTLevelOrder').onclick = () => this.bstTraversal('levelOrder');
+                document.getElementById('btnSearchBST').onclick = () => this.searchBST();
+                document.getElementById('btnDeleteBST').onclick = () => this.deleteBST();
+                document.getElementById('btnBuildAVL').onclick = () => this.buildAVL();
+                document.getElementById('btnCompareHeights').onclick = () => this.compareHeights();
+                document.getElementById('btnFindTopDangerous').onclick = () => this.findTopDangerous();
+                document.getElementById('btnHeapSort').onclick = () => this.heapSort();
+                document.getElementById('btnCompressMsg').onclick = () => this.compressMessage();
+                document.getElementById('btnBuildTBT').onclick = () => this.buildTBT();
+                document.getElementById('btnThreadedTraversal').onclick = () => this.threadedTraversal();
+            }
+
+            // --- Click Handler for Map Nodes (Unchanged) ---
+            handleNodeClick(nodeId) {
+                this.clearHighlights();
+                
+                if (!this.selectedStartNode) {
+                    this.selectedStartNode = nodeId;
+                    document.getElementById(`node-${nodeId}`).classList.add('node-start');
+                    this.graphOutput.innerHTML = `<span class="info">Start System: ${this.systemMap.get(nodeId).name}.<br>Now select an End System.</span>`;
+                } else if (!this.selectedEndNode) {
+                    if (nodeId === this.selectedStartNode) return;
+                    this.selectedEndNode = nodeId;
+                    document.getElementById(`node-${this.selectedStartNode}`).classList.add('node-start');
+                    document.getElementById(`node-${nodeId}`).classList.add('node-end');
+                    this.graphOutput.innerHTML = `<span class="info">Start: ${this.systemMap.get(this.selectedStartNode).name}<br>End: ${this.systemMap.get(this.selectedEndNode).name}</span>`;
+                    this.findShortestPath(); // Auto-run Dijkstra
+                } else {
+                    this.selectedStartNode = nodeId;
+                    this.selectedEndNode = null;
+                    document.getElementById(`node-${nodeId}`).classList.add('node-start');
+                    this.graphOutput.innerHTML = `<span class="info">Start System: ${this.systemMap.get(nodeId).name}.<br>Now select an End System.</span>`;
+                }
+            }
+
+
+            // --- Graph Functions (Unchanged) ---
+            findShortestPath() {
+                this.clearHighlights();
+                if (!this.selectedStartNode || !this.selectedEndNode) {
+                    this.graphOutput.innerHTML = `<span class="error">Error: Please select both a Start and End system on the map.</span>`;
+                    return;
+                }
+                document.getElementById(`node-${this.selectedStartNode}`).classList.add('node-start');
+                document.getElementById(`node-${this.selectedEndNode}`).classList.add('node-end');
+                
+                const { path, distance } = this.graph.dijkstra(this.selectedStartNode, this.selectedEndNode);
+                
+                if (distance === Infinity) {
+                    this.graphOutput.innerHTML = `<span class="error">No path found between ${this.systemMap.get(this.selectedStartNode).name} and ${this.systemMap.get(this.selectedEndNode).name}.</span>`;
+                    return;
+                }
+                
+                for (let i = 0; i < path.length - 1; i++) {
+                    const v1 = path[i];
+                    const v2 = path[i+1];
+                    let edge = document.getElementById(`edge-${v1}-${v2}`) || document.getElementById(`edge-${v2}-${v1}`);
+                    if (edge) edge.classList.add('highlighted-path');
+                }
+                
+                const pathNames = path.map(id => this.systemMap.get(id).name).join(' → ');
+                this.graphOutput.innerHTML = `Dijkstra's Path (Cheapest):\n${pathNames}\nTotal Cost: ${distance}`;
+            }
+
+            findUnweightedShortestPath() {
+                this.clearHighlights();
+                if (!this.selectedStartNode || !this.selectedEndNode) {
+                    this.graphOutput.innerHTML = `<span class="error">Error: Please select both a Start and End system on the map.</span>`;
+                    return;
+                }
+                document.getElementById(`node-${this.selectedStartNode}`).classList.add('node-start');
+                document.getElementById(`node-${this.selectedEndNode}`).classList.add('node-end');
+                
+                const path = this.graph.bfsShortestPath(this.selectedStartNode, this.selectedEndNode);
+                
+                if (path.length === 0) {
+                    this.graphOutput.innerHTML = `<span class="error">No path found.</span>`;
+                    return;
+                }
+                
+                for (let i = 0; i < path.length - 1; i++) {
+                    const v1 = path[i];
+                    const v2 = path[i+1];
+                    let edge = document.getElementById(`edge-${v1}-${v2}`) || document.getElementById(`edge-${v2}-${v1}`);
+                    if (edge) edge.classList.add('unweighted-path');
+                }
+                
+                const pathNames = path.map(id => this.systemMap.get(id).name).join(' → ');
+                this.graphOutput.innerHTML = `BFS Path (Fewest Stops):\n${pathNames}\nTotal Stops: ${path.length - 1}`;
+            }
+
+            calculateMST() {
+                this.clearHighlights();
+                const mstEdges = this.graph.kruskalMST();
+                let totalWeight = 0;
+                
+                mstEdges.forEach(edge => {
+                    totalWeight += edge.weight;
+                    let edgeEl = document.getElementById(`edge-${edge.from}-${edge.to}`) || document.getElementById(`edge-${edge.to}-${edge.from}`);
+                    if (edgeEl) edgeEl.classList.add('mst-edge');
+                });
+                
+                this.graphOutput.innerHTML = `Minimum Spanning Tree (Faction Network) Calculated.\nTotal Lane Cost: ${totalWeight}`;
+            }
+
+            bfsTraversal() {
+                if (!this.selectedStartNode) {
+                    this.graphOutput.innerHTML = `<span class="error">Please select a Start System on the map first.</span>`;
+                    return;
+                }
+                const result = this.graph.bfs(this.selectedStartNode);
+                const pathNames = result.map(id => this.systemMap.get(id).name).join(' → ');
+                this.graphOutput.innerHTML = `BFS Traversal from ${this.systemMap.get(this.selectedStartNode).name}:\n${pathNames}`;
+            }
+            
+            dfsTraversal() {
+                if (!this.selectedStartNode) {
+                    this.graphOutput.innerHTML = `<span class="error">Please select a Start System on the map first.</span>`;
+                    return;
+                }
+                const result = this.graph.dfs(this.selectedStartNode);
+                const pathNames = result.map(id => this.systemMap.get(id).name).join(' → ');
+                this.graphOutput.innerHTML = `DFS Traversal from ${this.systemMap.get(this.selectedStartNode).name}:\n${pathNames}`;
+            }
+            
+            // --- BST Functions (Added Animations) ---
+            buildBST() {
+                this.bst = new BinarySearchTree();
+                galaxyData.systems.forEach(s => this.bst.insert(s.name, s));
+                this.bstOutput.innerHTML = `BST Index built.\nHeight: ${this.bst.findHeight()}\nLeaves: ${this.bst.countLeaves()}`;
+                this.renderTree(this.bst.root, this.bstVis);
+                // --- NEW: Flash Animation ---
+                this.bstVis.classList.add('node-flashing');
+                setTimeout(() => this.bstVis.classList.remove('node-flashing'), 500);
+            }
+            
+            bstTraversal(type) {
+                if (!this.bst.root) {
+                    this.bstOutput.innerHTML = `<span class="error">BST is not built. Click "Build System Index" first.</span>`;
+                    return;
+                }
+                const result = this.bst[type]();
+                this.bstOutput.innerHTML = `${type} Traversal:\n${result.join(', ')}`;
+            }
+            
+            searchBST() {
+                const name = this.systemNameInput.value;
+                if (!name) {
+                    this.bstOutput.innerHTML = `<span class="error">Please enter a system name to search.</span>`;
+                    return;
+                }
+                const found = this.bst.search(name);
+                if (found) {
+                    this.bstOutput.innerHTML = `Found: ${found.value} (ID: ${found.data.id})\nPirate Activity: ${found.data.pirates}`;
+                    // --- NEW: Flash Animation ---
+                    const nodeEl = this.bstVis.querySelector(`[data-value="${name}"]`);
+                    if (nodeEl) {
+                        nodeEl.classList.add('node-flashing');
+                        setTimeout(() => nodeEl.classList.remove('node-flashing'), 500);
+                    }
+                } else {
+                    this.bstOutput.innerHTML = `<span class="error">System "${name}" not found in index.</span>`;
+                }
+            }
+            
+            deleteBST() {
+                const name = this.systemNameInput.value;
+                if (!name) {
+                    this.bstOutput.innerHTML = `<span class="error">Please enter a system name to delete.</span>`;
+                    return;
+                }
+                this.bst.delete(name);
+                this.bstOutput.innerHTML = `Attempted to delete "${name}".\nNew Height: ${this.bst.findHeight()}\nNew Leaves: ${this.bst.countLeaves()}`;
+                this.renderTree(this.bst.root, this.bstVis);
+                this.systemNameInput.value = '';
+                // --- NEW: Flash Animation ---
+                this.bstVis.classList.add('node-flashing');
+                setTimeout(() => this.bstVis.classList.remove('node-flashing'), 500);
+            }
+
+            // --- AVL Functions (Added Animation) ---
+            buildAVL() {
+                this.avl = new AVLTree();
+                galaxyData.systems.forEach(s => this.avl.insert(s.name, s));
+                this.avlOutput.innerHTML = `AVL Tree (Balanced Index) built.\nHeight: ${this.avl.findHeight()}`;
+                this.renderTree(this.avl.root, this.avlVis);
+                // --- NEW: Flash Animation ---
+                this.avlVis.classList.add('node-flashing');
+                setTimeout(() => this.avlVis.classList.remove('node-flashing'), 500);
+            }
+            
+            compareHeights() {
+                if (!this.bst.root || !this.avl.root) {
+                    this.avlOutput.innerHTML = `<span class="error">Build both BST and AVL trees first.</span>`;
+                    return;
+                }
+                this.avlOutput.innerHTML = `BST Height: ${this.bst.findHeight()}\nAVL Tree Height: ${this.avl.findHeight()}`;
+            }
+            
+            // --- Heap Functions (Unchanged) ---
+            findTopDangerous() {
+                const heap = new MaxHeap();
+                galaxyData.systems.forEach(s => heap.insert(s.pirates, s.name));
+                let result = "Top 5 Dangerous Systems:\n";
+                for (let i = 0; i < 5; i++) {
+                    const sys = heap.extractMax();
+                    if (sys) {
+                        result += `${i+1}. ${sys.data} (Threat: ${sys.value})\n`;
+                    }
+                }
+                this.heapOutput.innerHTML = result;
+            }
+            
+            heapSort() {
+                const heapData = galaxyData.systems.map(s => ({ value: s.pirates, data: s.name }));
+                const sorted = MaxHeap.heapSort(heapData);
+                const result = "Systems Sorted by Threat (High to Low):\n" + 
+                               sorted.map(s => `${s.data} (Threat: ${s.value})`).join('\n');
+                this.heapOutput.innerHTML = result;
+            }
+            
+            // --- Huffman Function (Unchanged) ---
+            compressMessage() {
+                const text = this.messageInput.value;
+                if (!text) {
+                    this.huffmanOutput.innerHTML = `<span class="error">Please enter a message to compress.</span>`;
+                    return;
+                }
+                const huffman = new HuffmanCoding();
+                const codes = huffman.compress(text);
+                let result = "Huffman Compression Codes:\n";
+                for (let char in codes) {
+                    result += `'${char}': ${codes[char]}\n`;
+                }
+                this.huffmanOutput.innerHTML = result;
+            }
+            
+            // --- Threaded BST Functions (Unchanged) ---
+            buildTBT() {
+                this.tbt = new ThreadedBST();
+                galaxyData.systems.forEach(s => this.tbt.insert(s.name, s));
+                this.threadedOutput.innerHTML = `Threaded BST Index built.`;
+            }
+
+            threadedTraversal() {
+                if (!this.tbt.root) {
+                    this.threadedOutput.innerHTML = `<span class="error">Threaded BST is not built. Click "Build Threaded Index" first.</span>`;
+                    return;
+                }
+                const result = this.tbt.inOrderTraversal();
+                this.threadedOutput.innerHTML = `Threaded In-Order Traversal (No Recursion):\n${result.join(', ')}`;
+            }
+            
+            // --- NEW: Simulation Functions ---
+            startSimulation() {
+                if (this.simulationInterval) return; // Already running
+                this.simulationInterval = setInterval(() => this.updateSimulation(), 3000); // 3 seconds
+                document.getElementById('btnStartSim').disabled = true;
+                document.getElementById('btnStopSim').disabled = false;
+            }
+            
+            stopSimulation() {
+                clearInterval(this.simulationInterval);
+                this.simulationInterval = null;
+                document.getElementById('btnStartSim').disabled = false;
+                document.getElementById('btnStopSim').disabled = true;
+            }
+            
+            updateSimulation() {
+                // 1. Pick a random system and change its pirate level
+                const randomSystem = galaxyData.systems[Math.floor(Math.random() * galaxyData.systems.length)];
+                randomSystem.pirates = Math.floor(Math.random() * 11); // 0-10
+                this.systemMap.set(randomSystem.id, randomSystem);
+
+                // 2. Re-build the graph with new dynamic costs
+                this.buildGraph();
+                
+                // 3. Update the map visualization (labels)
+                this.updateGalaxyMap();
+                
+                // 4. Update the threat report
+                this.findTopDangerous();
+                
+                // 5. If a path is selected, re-calculate it
+                if (this.selectedStartNode && this.selectedEndNode) {
+                    // Check which path type is active and re-run it
+                    if (this.svg.querySelector('.highlighted-path')) {
+                        this.findShortestPath();
+                    } else if (this.svg.querySelector('.unweighted-path')) {
+                        this.findUnweightedShortestPath();
+                    }
+                }
+            }
+        }
+
+        // Kick off the application
+        document.addEventListener('DOMContentLoaded', () => {
+            window.app = new App();
+        });
+        
+    </script>
+</body>
+</html>
